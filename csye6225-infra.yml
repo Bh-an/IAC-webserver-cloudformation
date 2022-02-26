@@ -93,7 +93,7 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId:
         Ref: myInternetGateway
-
+      
   mySubnet1RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -129,4 +129,11 @@ Outputs:
     Subnet3Id:
       Description: The Subnet3 ID
       Value: !Ref Subnet3
+    GatewayId:
+      Description: The Internet Gateway ID
+      Value: !Ref myInternetGateway
+    RouteTableId:
+      Description: The Route Table ID
+      Value: !Ref myRouteTable
+    
 
