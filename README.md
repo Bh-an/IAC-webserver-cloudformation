@@ -9,5 +9,8 @@ Pre-requisite env values:
 
 Stack creation:
 
-`aws cloudformation create-stack --stack-name test-vpc-demofinal --template-body file://csye6225-infra.yml --parameters ParameterKey=VpcCid
-rBlock,ParameterValue="10.0.0.0/16"`
+`aws cloudformation create-stack --stack-name full-test --template-body file://csye6225-infra.yml --parameters ParameterKey=VpcCidrBlock,ParameterValue="10.0.0.0/16" ParameterKey=AMI,ParameterValue="ami-011a0aa2aa8d7201b"`
+
+Stack deletion:
+
+`aws cloudformation delete-stack --stack-name full-test`
