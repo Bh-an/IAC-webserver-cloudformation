@@ -6,6 +6,19 @@ Parameters:
     Description: "CIDR block for VPC"
     Type: String
     Default: "10.0.0.0/16"
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
+    Description: Enter instance size
+  AMI:
+    Type: String
+    Default: ami-048effa42ff2399bb
+    Description: The Linux AMI to use
+  Key:
+    Type: String
+    Default: MyKeyPair
+    Description: The key used to access the instance
+  
 
 Resources:
   myVPC:
@@ -115,8 +128,57 @@ Resources:
         Ref: Subnet3
       RouteTableId:
         Ref: myRouteTable
-
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "Application Security Group"
+      GroupDescription: "SSH and web traffic in, all traffic out."
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0 
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0 
+        - IpProtocol: tcp
+          FromPort: '8080'
+          ToPort: '8080'
+          CidrIp: 0.0.0.0/0 
+  myWebserver:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref AMI
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName: !Ref Key
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          SubnetId: !Ref Subnet1
+          GroupSet: 
+            - !Ref InstanceSecurityGroup
+      
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 16
+            VolumeType: gp2
+            DeleteOnTermination: true
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
 Outputs:
+    EC2Id:
+      Description: The VPC ID
+      Value: !Ref myWebserver
     VpcId:
       Description: The VPC ID
       Value: !Ref myVPC
