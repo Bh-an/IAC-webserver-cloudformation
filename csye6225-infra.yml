@@ -353,7 +353,7 @@ Resources:
             VolumeSize: 16
             VolumeType: gp2
             DeleteOnTermination: true
-      IamInstanceProfile: !Ref myInstanceRole
+      IamInstanceProfile: !Ref myInstanceProfile
       UserData:
         Fn::Base64: 
           !Sub 
