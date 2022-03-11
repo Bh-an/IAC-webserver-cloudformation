@@ -386,6 +386,9 @@ Resources:
               amazon.bucketname)
               val="$BUCKET_NAME"
               ;;
+              cloud.aws.credentials.instanceProfile)
+              val="true"
+              ;;
               esac
               printf '%s\n' "$prop=$val"
             done < /home/ec2-user/javaapp/application.properties > file.tmp && mv file.tmp /home/ec2-user/javaapp/application.properties
