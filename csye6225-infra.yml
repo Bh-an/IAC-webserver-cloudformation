@@ -292,8 +292,8 @@ Resources:
               - s3:PutObject
               - s3:DeleteObject
             Resource:
-              - arn:aws:s3:::csye6225-bucket/*
-              - arn:aws:s3:::csye6225-bucket
+              - !Join [ "", [ "arn:aws:s3::", !Ref S3Bucket, "/*" ] ]
+              - !Join [ "", [ "arn:aws:s3::", !Ref S3Bucket ] ]
       Roles:
         - !Ref myInstanceRole
 
@@ -426,7 +426,7 @@ Resources:
       DBParameterGroupName: appsql
       MultiAZ: false
       DBInstanceClass: db.t2.micro
-      DBInstanceIdentifier: csye62251
+      DBInstanceIdentifier: csye6225
       AllocatedStorage: 5
       DBName: csye6225
       DBSubnetGroupName: !Ref myDBSubnetGroup
