@@ -356,10 +356,11 @@ Resources:
       IamInstanceProfile: !Ref myInstanceRole
       UserData:
         Fn::Base64: 
-          !Sub |
+          !Sub 
+          - |
             #!/bin/bash
             export DB_CONNECTION="${webserverRDS.Endpoint.Address}"
-            export BUCKET_NAME="$(!Ref S3Bucket)"
+            export BUCKET_NAME="${bucket_name}"
             while IFS='=' read -r prop val; do
               case $prop in
               spring.datasource.url)
@@ -412,6 +413,7 @@ Resources:
 
 
             yum remove -y expect
+          - bucket_name: !Ref S3Bucket
 
       Tags:
       - Key: Name
@@ -423,7 +425,7 @@ Resources:
       DBParameterGroupName: appsql
       MultiAZ: false
       DBInstanceClass: db.t2.micro
-      DBInstanceIdentifier: csye6225
+      DBInstanceIdentifier: csye62251
       AllocatedStorage: 5
       DBName: csye6225
       DBSubnetGroupName: !Ref myDBSubnetGroup
