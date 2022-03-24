@@ -204,25 +204,40 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: "application"
-      GroupDescription: "SSH and web traffic in, all traffic out."
+      GroupDescription: "SSH and APP tarffic in from LB"
       VpcId: !Ref myVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: '22'
           ToPort: '22'
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: '22'
-          ToPort: '22'
-          CidrIp: 0.0.0.0/0 
-        - IpProtocol: tcp
-          FromPort: '443'
-          ToPort: '443'
-          CidrIp: 0.0.0.0/0 
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
         - IpProtocol: tcp
           FromPort: '8080'
           ToPort: '8080'
-          CidrIp: 0.0.0.0/0 
+          SourceSecurityGroupId: !Ref ALBSecurityGroup 
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref myVPC
+      GroupName: "load balancer"
+      GroupDescription: Allow http to client host 
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: 'tcp'
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: AWS::StackName 
 
   NoIngressSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -339,29 +354,25 @@ Resources:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
 
-  myWebserver:
-    Type: 'AWS::EC2::Instance'
+  AsgLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
     DependsOn: webserverRDS
     Properties:
+      LaunchConfigurationName: asg_launch_config
       ImageId: !Ref AMI
       InstanceType:
         Ref: InstanceTypeParameter
       KeyName: !Ref Key
-      NetworkInterfaces:
-        - DeviceIndex: 0
-          AssociatePublicIpAddress: true
-          DeleteOnTermination: true
-          SubnetId: !Ref Subnet1
-          GroupSet: 
-            - !Ref InstanceSecurityGroup
-      
       BlockDeviceMappings:
         - DeviceName: /dev/xvda
           Ebs:
             VolumeSize: 16
             VolumeType: gp2
             DeleteOnTermination: true
+      SecurityGroups:
+        - !Ref InstanceSecurityGroup
       IamInstanceProfile: !Ref myInstanceProfile
+      AssociatePublicIpAddress: true
       UserData:
         Fn::Base64: 
           !Sub 
@@ -426,10 +437,122 @@ Resources:
 
             yum remove -y expect
           - bucket_name: !Ref S3Bucket
-
+        
+  DeployAppASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: 
+        Fn::Join:
+            - '.'
+            - - ASG
+              - !Ref AWS::StackName
+      Cooldown: 60
+      VPCZoneIdentifier:
+        - !Ref Subnet1
+        - !Ref Subnet2
+        - !Ref Subnet3
+      DesiredCapacity: 3
+      LaunchConfigurationName: !Ref AsgLaunchConfig
+      MaxSize: 5
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref WebAppTargetGroup
       Tags:
-      - Key: Name
-        Value: !Ref AWS::StackName
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: !Ref AWS::StackName
+        - Key: Application
+          PropagateAtLaunch: true
+          Value: Webapp
+
+  ScaleOutPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref DeployAppASG
+      Cooldown: '120'
+      ScalingAdjustment: '1'
+  
+  ScaleInPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref DeployAppASG
+      Cooldown: '120'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: '> 5% 1 min'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref DeployAppASG
+      Statistic: Average
+      ComparisonOperator: GreaterThanThreshold
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '5'
+      AlarmActions:
+        - !Ref ScaleOutPolicy
+
+  CPUAlarmLow:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: '< 3% 30 sec'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref DeployAppASG
+      Statistic: Average
+      ComparisonOperator: LessThanThreshold
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '3'
+      AlarmActions:
+        - !Ref ScaleInPolicy
+     
+  WebAppALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: AttachGateway
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref Subnet1
+        - !Ref Subnet2
+        - !Ref Subnet3
+      Tags:
+        - Key: Name
+          Value: AWS::StackName
+      Type: application
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: WebAppTargetGroup
+      LoadBalancerArn:
+        Ref: WebAppALB
+      Port: '80'
+      Protocol: HTTP
+
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: '8080'
+      Protocol: 'HTTP'
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: AWS::StackName
 
   webserverRDS:   
     Type: AWS::RDS::DBInstance
@@ -448,10 +571,121 @@ Resources:
       MasterUserPassword: Markiplierpewpew91!  
       VPCSecurityGroups: [!Ref RDSSecurityGroup]
 
+  LoadBalancerAlias:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      AliasTarget:
+        DNSName: !GetAtt WebAppALB.DNSName
+        HostedZoneId: !GetAtt WebAppALB.CanonicalHostedZoneID
+      HostedZoneId: Z017589439LIAURVMJC1U
+      Name: prod.applicationbhan.me
+      Type: A
+
+  # myWebserver:
+  #   Type: 'AWS::EC2::Instance'
+  #   DependsOn: webserverRDS
+  #   Properties:
+  #     ImageId: !Ref AMI
+  #     InstanceType:
+  #       Ref: InstanceTypeParameter
+  #     KeyName: !Ref Key
+  #     NetworkInterfaces:
+  #       - DeviceIndex: 0
+  #         AssociatePublicIpAddress: true
+  #         DeleteOnTermination: true
+  #         SubnetId: !Ref Subnet1
+  #         GroupSet: 
+  #           - !Ref InstanceSecurityGroup
+      
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/xvda
+  #         Ebs:
+  #           VolumeSize: 16
+  #           VolumeType: gp2
+  #           DeleteOnTermination: true
+  #     IamInstanceProfile: !Ref myInstanceProfile
+  #     UserData:
+  #       Fn::Base64: 
+  #         !Sub 
+  #         - |
+  #           #!/bin/bash
+  #           export DB_CONNECTION="${webserverRDS.Endpoint.Address}"
+  #           export BUCKET_NAME="${bucket_name}"
+  #           while IFS='=' read -r prop val; do
+  #             case $prop in
+  #             spring.datasource.url)
+  #             val="jdbc:mysql://$DB_CONNECTION:3306/csye6225"
+  #             ;;
+  #             spring.datasource.username)
+  #             val="csye6225"
+  #             ;;
+  #             spring.datasource.password)
+  #             val="Markiplierpewpew91!"
+  #             ;;
+  #             spring.datasource.driver-class-name)
+  #             val="com.mysql.jdbc.Driver"
+  #             ;;
+  #             amazon.bucketname)
+  #             val="$BUCKET_NAME"
+  #             ;;
+  #             cloud.aws.credentials.instanceProfile)
+  #             val="true"
+  #             ;;
+  #             esac
+  #             printf '%s\n' "$prop=$val"
+  #           done < /home/ec2-user/javaapp/application.properties > file.tmp && mv file.tmp /home/ec2-user/javaapp/application.properties
+
+  #           yum install -y expect
+
+  #           MYSQL_UPDATE=$(expect -c "
+
+  #           set timeout 5 
+  #           spawn mysql -h $DB_CONNECTION -P 3306 -u csye6225 -p
+
+  #           expect \"Enter password: \"
+  #           send \"Markiplierpewpew91!\r\"
+       
+  #           expect \"mysql>\"
+  #           send \"CREATE DATABASE csye6225;\r\"
+
+  #           expect \"mysql>\"
+  #           send \"USE csye6225;\r\"
+
+  #           expect \"mysql>\"
+  #           send \"create table users (id varchar(50) primary key, username varchar(40), password varchar(80), first_name varchar(20), last_name varchar(20), account_created datetime, account_updated datetime);\r\"
+
+  #           expect \"mysql>\"
+  #           send \"create table images(id varchar(50), file_name varchar(50), url varchar(120), upload_date datetime, user_id varchar(50),  foreign key(user_id) references users(id));\r\"
+
+  #           expect \"mysql>\"
+  #           send \"quit;\r\"
+
+  #           expect eof
+  #           ")
+
+  #           echo "$MYSQL_UPDATE"
+
+
+  #           yum remove -y expect
+  #         - bucket_name: !Ref S3Bucket
+
+  #     Tags:
+  #     - Key: Name
+  #       Value: !Ref AWS::StackName
+
+#   Route53RecordSet:
+#     Type: AWS::Route53::RecordSet
+#     Properties: 
+#       Name: !Ref HostName
+#       HostedZoneId: !Ref HostedZoneId
+#       Type: A
+#       AliasTarget: 
+#         DNSName: !GetAtt ElasticLoadBalancer.DNSName
+#         HostedZoneId: !GetAtt ElasticLoadBalancer.CanonicalHostedZoneIDe
 Outputs:
-    EC2Id:
-      Description: The VPC ID
-      Value: !Ref myWebserver
+    # EC2Id:
+    #   Description: The VPC ID
+    #   Value: !Ref myWebserver
     VpcId:
       Description: The VPC ID
       Value: !Ref myVPC
@@ -472,3 +706,18 @@ Outputs:
       Value: !Ref myRouteTable
     
 
+  
+  
+# "RestELB" : {
+#         "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+#         "DependsOn": "AttachGateway",
+#         "Properties": {
+#             "LoadBalancerName": {"Fn::Join": ["",["Rest-ELB-", {"Ref": "VPC"}]]},
+#             "CrossZone" : "true",
+#             "Subnets": [{ "Ref": "PublicSubnet1" },{ "Ref": "PublicSubnet2" }],
+#             "Listeners" : [
+#                 {"LoadBalancerPort" : "80", "InstancePort" : "80","Protocol" : "HTTP"},
+#                 {"LoadBalancerPort" : "6060", "InstancePort" : "6060","Protocol" : "HTTP"}
+#             ],
+#         }
+#     },
