@@ -11,6 +11,8 @@ Stack creation:
 
 `aws cloudformation create-stack --stack-name new-test --template-body file://CLOUDFORMATION.yml --parameters ParameterKey=VpcCidrBlock,ParameterValue="10.0.0.0/16" ParameterKey=AMI,ParameterValue="AMI_ID" --capabilities CAPABILITY_NAMED_IAM`
 
+`aws cloudformation create-stack --stack-name role-test --template-body file://Roles.yml --capabilities CAPABILITY_NAMED_IAM`
+
 Stack deletion:
 
 `aws cloudformation delete-stack --stack-name new-test`
