@@ -1,0 +1,797 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: CSYE 6225 IaC
+
+Parameters:
+  VpcCidrBlock:
+    Description: "CIDR block for VPC"
+    Type: String
+    Default: "10.0.0.0/16"
+  InstanceTypeParameter:
+    Type: String
+    Default: t2.micro
+    Description: Enter instance size
+  AMI:
+    Type: String
+    Default: ami-048effa42ff2399bb
+    Description: The Linux AMI to use
+  Key:
+    Type: String
+    Default: MyKeyPair
+    Description: The key used to access the instance
+  
+
+Resources:
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidrBlock
+      EnableDnsSupport: 'true'
+      EnableDnsHostnames: 'true'
+      InstanceTenancy: 'default'
+      Tags:   
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+  Subnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: 10.0.0.0/20
+      AvailabilityZone:
+       Fn::Select: 
+        - 0
+        - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+  Subnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: 10.0.16.0/20
+      AvailabilityZone:
+        Fn::Select: 
+        - 1
+        - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+  Subnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: 10.0.32.0/20
+      AvailabilityZone:
+        Fn::Select: 
+        - 2
+        - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+  PrivSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: 10.0.48.0/20
+      AvailabilityZone:
+       Fn::Select: 
+        - 0
+        - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+  PrivSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: 10.0.64.0/20
+      AvailabilityZone:
+        Fn::Select: 
+        - 1
+        - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+  PrivSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId:
+        Ref: myVPC
+      CidrBlock: 10.0.80.0/20
+      AvailabilityZone:
+        Fn::Select: 
+        - 2
+        - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+  myInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: myVPC
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId:
+        Ref: myVPC
+      InternetGatewayId:
+        Ref: myInternetGateway
+
+  myRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId:  
+        Ref: myVPC
+      Tags:
+      - Key: Name
+        Value: !Ref AWS::StackName
+
+  myPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: 
+        Ref: myVPC
+      Tags:
+        - Key: Name
+          Value: !Ref AWS::StackName
+  
+  myInternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId:
+        Ref: myRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: myInternetGateway
+      
+  mySubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: Subnet1
+      RouteTableId:
+        Ref: myRouteTable
+  mySubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: Subnet2
+      RouteTableId:
+        Ref: myRouteTable
+  mySubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: Subnet3
+      RouteTableId:
+        Ref: myRouteTable
+
+  myPrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivSubnet1
+      RouteTableId:
+        Ref: myPrivateRouteTable
+  myPrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivSubnet2
+      RouteTableId:
+        Ref: myPrivateRouteTable
+  myPrivateSubnet3RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId:
+        Ref: PrivSubnet3
+      RouteTableId:
+        Ref: myPrivateRouteTable
+  
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "application"
+      GroupDescription: "SSH and APP tarffic in from LB"
+      VpcId: !Ref myVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+        - IpProtocol: tcp
+          FromPort: '8080'
+          ToPort: '8080'
+          SourceSecurityGroupId: !Ref ALBSecurityGroup 
+        - IpProtocol: 'tcp'
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: 0.0.0.0/0
+
+  ALBSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref myVPC
+      GroupName: "load balancer"
+      GroupDescription: Allow http to client host 
+      SecurityGroupIngress:
+        - IpProtocol: 'tcp'
+          FromPort: '80'
+          ToPort: '80'
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: 'tcp'
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: AWS::StackName 
+
+  NoIngressSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "no-ingress-sg"
+      GroupDescription: "Security group with no ingress rule"
+      VpcId: !Ref myVPC      
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "database"
+      GroupDescription: Allow http to client host
+      VpcId: !Ref myVPC
+
+  RDSSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref RDSSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3306
+      ToPort: 3306
+      SourceSecurityGroupId: !Ref InstanceSecurityGroup
+
+  myDBSubnetGroup: 
+    Type: "AWS::RDS::DBSubnetGroup"
+    Properties: 
+      DBSubnetGroupDescription: "Subnet group for DB instances"
+      SubnetIds: 
+        - !Ref PrivSubnet1
+        - !Ref PrivSubnet2
+
+  myInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties: 
+      InstanceProfileName: instance-profile
+      Path: /
+      Roles: 
+       - !Ref myInstanceRole
+
+  myInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: EC2-CSYE6225
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+
+  myInstanceS3Policy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: WebApps3
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:DeleteObject
+            Resource:
+              - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - !Ref S3Bucket
+                  - "/*"
+              - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - !Ref S3Bucket
+
+      Roles:
+        - !Ref myInstanceRole
+
+  myInstanceCodedeployPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CodeDeploy-EC2-S3
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          -
+            Effect: Allow
+            Action:
+              - s3:Get*
+              - s3:List*
+            Resource:
+              - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - "codedeploy.applicationbhan.me"
+                  - "/*"
+              - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - "codedeploy.applicationbhan.me"
+
+      Roles:
+        - !Ref myInstanceRole
+
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Description: Creating Amazon S3 bucket from CloudFormation
+    Properties:
+      BucketName:
+        Fn::Join:
+          - '.'
+          - - Fn::Select:
+                - 4
+                - Fn::Split:
+                    - '-'
+                    - Fn::Select:
+                        - 2
+                        - Fn::Split:
+                            - /
+                            - Ref: AWS::StackId
+            - demo.applicationbhan.me
+      BucketEncryption: 
+        ServerSideEncryptionConfiguration: 
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: File lifecycle
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+
+  AsgLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    DependsOn: webserverRDS
+    Properties:
+      LaunchConfigurationName: asg_launch_config
+      ImageId: !Ref AMI
+      InstanceType:
+        Ref: InstanceTypeParameter
+      KeyName: !Ref Key
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 16
+            VolumeType: gp2
+            DeleteOnTermination: true
+      SecurityGroups:
+        - !Ref InstanceSecurityGroup
+      IamInstanceProfile: !Ref myInstanceProfile
+      AssociatePublicIpAddress: true
+      UserData:
+        Fn::Base64: 
+          !Sub 
+          - |
+            #!/bin/bash
+            export DB_CONNECTION="${webserverRDS.Endpoint.Address}"
+            export BUCKET_NAME="${bucket_name}"
+            while IFS='=' read -r prop val; do
+              case $prop in
+              spring.datasource.url)
+              val="jdbc:mysql://$DB_CONNECTION:3306/csye6225"
+              ;;
+              spring.datasource.username)
+              val="csye6225"
+              ;;
+              spring.datasource.password)
+              val="Markiplierpewpew91!"
+              ;;
+              spring.datasource.driver-class-name)
+              val="com.mysql.jdbc.Driver"
+              ;;
+              amazon.bucketname)
+              val="$BUCKET_NAME"
+              ;;
+              cloud.aws.credentials.instanceProfile)
+              val="true"
+              ;;
+              esac
+              printf '%s\n' "$prop=$val"
+            done < /home/ec2-user/javaapp/application.properties > file.tmp && mv file.tmp /home/ec2-user/javaapp/application.properties
+
+            yum install -y expect
+
+            MYSQL_UPDATE=$(expect -c "
+
+            set timeout 5 
+            spawn mysql -h $DB_CONNECTION -P 3306 -u csye6225 -p
+
+            expect \"Enter password: \"
+            send \"Markiplierpewpew91!\r\"
+       
+            expect \"mysql>\"
+            send \"CREATE DATABASE csye6225;\r\"
+
+            expect \"mysql>\"
+            send \"USE csye6225;\r\"
+
+            expect \"mysql>\"
+            send \"create table users (id varchar(50) primary key, username varchar(40), password varchar(80), first_name varchar(20), last_name varchar(20), account_created datetime, account_updated datetime);\r\"
+
+            expect \"mysql>\"
+            send \"create table images(id varchar(50), file_name varchar(50), url varchar(120), upload_date datetime, user_id varchar(50),  foreign key(user_id) references users(id));\r\"
+
+            expect \"mysql>\"
+            send \"quit;\r\"
+
+            expect eof
+            ")
+
+            echo "$MYSQL_UPDATE"
+
+
+            yum remove -y expect
+          - bucket_name: !Ref S3Bucket
+        
+  DeployAppASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: 
+        Fn::Join:
+            - '.'
+            - - ASG
+              - !Ref AWS::StackName
+      Cooldown: 60
+      VPCZoneIdentifier:
+        - !Ref Subnet1
+        - !Ref Subnet2
+        - !Ref Subnet3
+      DesiredCapacity: 1
+      LaunchConfigurationName: !Ref AsgLaunchConfig
+      MaxSize: 5
+      MinSize: 1
+      TargetGroupARNs:
+        - !Ref WebAppTargetGroup
+      Tags:
+        - Key: Name
+          PropagateAtLaunch: true
+          Value: !Ref AWS::StackName
+        - Key: Application
+          PropagateAtLaunch: true
+          Value: Webapp
+
+  ScaleOutPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref DeployAppASG
+      Cooldown: '180'
+      ScalingAdjustment: '1'
+  
+  ScaleInPolicy:
+    Type: 'AWS::AutoScaling::ScalingPolicy'
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref DeployAppASG
+      Cooldown: '180'
+      ScalingAdjustment: '-1'
+
+  HighCPUalarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: '> 5% 2 min'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref DeployAppASG
+      Statistic: Average
+      ComparisonOperator: GreaterThanThreshold
+      Period: '120'
+      EvaluationPeriods: '1'
+      Threshold: '5'
+      AlarmActions:
+        - !Ref ScaleOutPolicy
+
+  LowCPUalarm:
+    Type: 'AWS::CloudWatch::Alarm'
+    Properties:
+      AlarmDescription: '< 3% 2 min'
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref DeployAppASG
+      Statistic: Average
+      ComparisonOperator: LessThanThreshold
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '3'
+      AlarmActions:
+        - !Ref ScaleInPolicy
+     
+  WebAppALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: AttachGateway
+    Properties:
+      IpAddressType: ipv4
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets:
+        - !Ref Subnet1
+        - !Ref Subnet2
+        - !Ref Subnet3
+      Tags:
+        - Key: Name
+          Value: AWS::StackName
+      Type: application
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: WebAppTargetGroup
+      LoadBalancerArn:
+        Ref: WebAppALB
+      Port: '80'
+      Protocol: HTTP
+
+  WebAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: '8080'
+      Protocol: 'HTTP'
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: Name
+          Value: AWS::StackName
+
+  webserverRDS:   
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBParameterGroupName: appsql
+      MultiAZ: false
+      DBInstanceClass: db.t2.micro
+      DBInstanceIdentifier: csye6225test
+      AllocatedStorage: 5
+      DBName: csye6225
+      DBSubnetGroupName: !Ref myDBSubnetGroup
+      PubliclyAccessible: false
+      DeleteAutomatedBackups: true
+      Engine: MySQL
+      MasterUsername: csye6225
+      MasterUserPassword: Markiplierpewpew91!  
+      VPCSecurityGroups: [!Ref RDSSecurityGroup]
+
+  LoadBalancerAlias:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      AliasTarget:
+        DNSName: !GetAtt WebAppALB.DNSName
+        HostedZoneId: !GetAtt WebAppALB.CanonicalHostedZoneID
+      HostedZoneId: Z017589439LIAURVMJC1U
+      Name: prod.applicationbhan.me
+      Type: A
+
+  myCodeDeployApplication:
+    Type: "AWS::CodeDeploy::Application"
+    Properties:
+      ApplicationName: "csye6225-webapp"
+      ComputePlatform: Server
+
+  myDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup 
+    DependsOn:
+      - DeployAppASG
+    Properties:
+      DeploymentGroupName: csye6225-webapp-development
+      ApplicationName: !Ref myCodeDeployApplication
+      DeploymentStyle:
+        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
+        DeploymentType: IN_PLACE
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      AutoScalingGroups:
+        - !Ref DeployAppASG
+      Ec2TagFilters:
+        - Type: "KEY_AND_VALUE"
+          Key: "CodeDeploy"
+          Value: "true"
+      ServiceRoleArn: !GetAtt "myCodeDeployRole.Arn"
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events: 
+        -  DEPLOYMENT_FAILURE  
+  
+  myCodeDeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "CodeDeployServiceRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            Sid: "CodeDeployTrustPolicy"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "codedeploy.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns: 
+        - "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+      
+    
+  # myWebserver:
+  #   Type: 'AWS::EC2::Instance'
+  #   DependsOn: webserverRDS
+  #   Properties:
+  #     ImageId: !Ref AMI
+  #     InstanceType:
+  #       Ref: InstanceTypeParameter
+  #     KeyName: !Ref Key
+  #     NetworkInterfaces:
+  #       - DeviceIndex: 0
+  #         AssociatePublicIpAddress: true
+  #         DeleteOnTermination: true
+  #         SubnetId: !Ref Subnet1
+  #         GroupSet: 
+  #           - !Ref InstanceSecurityGroup
+      
+  #     BlockDeviceMappings:
+  #       - DeviceName: /dev/xvda
+  #         Ebs:
+  #           VolumeSize: 16
+  #           VolumeType: gp2
+  #           DeleteOnTermination: true
+  #     IamInstanceProfile: !Ref myInstanceProfile
+  #     UserData:
+  #       Fn::Base64: 
+  #         !Sub 
+  #         - |
+  #           #!/bin/bash
+  #           export DB_CONNECTION="${webserverRDS.Endpoint.Address}"
+  #           export BUCKET_NAME="${bucket_name}"
+  #           while IFS='=' read -r prop val; do
+  #             case $prop in
+  #             spring.datasource.url)
+  #             val="jdbc:mysql://$DB_CONNECTION:3306/csye6225"
+  #             ;;
+  #             spring.datasource.username)
+  #             val="csye6225"
+  #             ;;
+  #             spring.datasource.password)
+  #             val="Markiplierpewpew91!"
+  #             ;;
+  #             spring.datasource.driver-class-name)
+  #             val="com.mysql.jdbc.Driver"
+  #             ;;
+  #             amazon.bucketname)
+  #             val="$BUCKET_NAME"
+  #             ;;
+  #             cloud.aws.credentials.instanceProfile)
+  #             val="true"
+  #             ;;
+  #             esac
+  #             printf '%s\n' "$prop=$val"
+  #           done < /home/ec2-user/javaapp/application.properties > file.tmp && mv file.tmp /home/ec2-user/javaapp/application.properties
+
+  #           yum install -y expect
+
+  #           MYSQL_UPDATE=$(expect -c "
+
+  #           set timeout 5 
+  #           spawn mysql -h $DB_CONNECTION -P 3306 -u csye6225 -p
+
+  #           expect \"Enter password: \"
+  #           send \"Markiplierpewpew91!\r\"
+       
+  #           expect \"mysql>\"
+  #           send \"CREATE DATABASE csye6225;\r\"
+
+  #           expect \"mysql>\"
+  #           send \"USE csye6225;\r\"
+
+  #           expect \"mysql>\"
+  #           send \"create table users (id varchar(50) primary key, username varchar(40), password varchar(80), first_name varchar(20), last_name varchar(20), account_created datetime, account_updated datetime);\r\"
+
+  #           expect \"mysql>\"
+  #           send \"create table images(id varchar(50), file_name varchar(50), url varchar(120), upload_date datetime, user_id varchar(50),  foreign key(user_id) references users(id));\r\"
+
+  #           expect \"mysql>\"
+  #           send \"quit;\r\"
+
+  #           expect eof
+  #           ")
+
+  #           echo "$MYSQL_UPDATE"
+
+
+  #           yum remove -y expect
+  #         - bucket_name: !Ref S3Bucket
+
+  #     Tags:
+  #     - Key: Name
+  #       Value: !Ref AWS::StackName
+
+#   Route53RecordSet:
+#     Type: AWS::Route53::RecordSet
+#     Properties: 
+#       Name: !Ref HostName
+#       HostedZoneId: !Ref HostedZoneId
+#       Type: A
+#       AliasTarget: 
+#         DNSName: !GetAtt ElasticLoadBalancer.DNSName
+#         HostedZoneId: !GetAtt ElasticLoadBalancer.CanonicalHostedZoneIDe
+Outputs:
+    # EC2Id:
+    #   Description: The VPC ID
+    #   Value: !Ref myWebserver
+    VpcId:
+      Description: The VPC ID
+      Value: !Ref myVPC
+    Subnet1Id:
+      Description: The Subnet1 ID
+      Value: !Ref Subnet1
+    Subnet2Id:
+      Description: The Subnet2 ID
+      Value: !Ref Subnet2
+    Subnet3Id:
+      Description: The Subnet3 ID
+      Value: !Ref Subnet3
+    GatewayId:
+      Description: The Internet Gateway ID
+      Value: !Ref myInternetGateway
+    RouteTableId:
+      Description: The Route Table ID
+      Value: !Ref myRouteTable
+    
+
+  
+  
+# "RestELB" : {
+#         "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+#         "DependsOn": "AttachGateway",
+#         "Properties": {
+#             "LoadBalancerName": {"Fn::Join": ["",["Rest-ELB-", {"Ref": "VPC"}]]},
+#             "CrossZone" : "true",
+#             "Subnets": [{ "Ref": "PublicSubnet1" },{ "Ref": "PublicSubnet2" }],
+#             "Listeners" : [
+#                 {"LoadBalancerPort" : "80", "InstancePort" : "80","Protocol" : "HTTP"},
+#                 {"LoadBalancerPort" : "6060", "InstancePort" : "6060","Protocol" : "HTTP"}
+#             ],
+#         }
+#     },
