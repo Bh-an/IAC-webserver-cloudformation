@@ -215,7 +215,7 @@ Resources:
           FromPort: '8080'
           ToPort: '8080'
           SourceSecurityGroupId: !Ref ALBSecurityGroup 
-        - IpProtocol: tcp
+        - IpProtocol: 'tcp'
           FromPort: '22'
           ToPort: '22'
           CidrIp: 0.0.0.0/0
@@ -285,8 +285,7 @@ Resources:
       AssumeRolePolicyDocument:
         Version: 2012-10-17
         Statement:
-          -
-            Effect: Allow
+          - Effect: Allow
             Principal:
               Service:
                 - ec2.amazonaws.com
@@ -294,15 +293,14 @@ Resources:
               - sts:AssumeRole
       Path: /
 
-  myInstancePolicy:
+  myInstanceS3Policy:
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: WebApps3
       PolicyDocument:
         Version: 2012-10-17
         Statement:
-          -
-            Effect: Allow
+          - Effect: Allow
             Action:
               - s3:PutObject
               - s3:DeleteObject
@@ -316,6 +314,63 @@ Resources:
                 - ""
                 - - "arn:aws:s3:::"
                   - !Ref S3Bucket
+
+      Roles:
+        - !Ref myInstanceRole
+
+  myInstanceCodedeployPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CodeDeploy-EC2-S3
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:Get*
+              - s3:List*
+            Resource:
+              - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - "codedeploy.applicationbhan.me"
+                  - "/*"
+              - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - "codedeploy.applicationbhan.me"
+
+      Roles:
+        - !Ref myInstanceRole
+
+  myInstanceCloudWatchPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Cloudwatch-EC2
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - cloudwatch:PutMetricData
+              - ec2:DescribeVolumes
+              - ec2:DescribeTags
+              - logs:PutLogEvents
+              - logs:DescribeLogStreams
+              - logs:DescribeLogGroups
+              - logs:CreateLogStream
+              - logs:CreateLogGroup
+            Resource:
+              - "*"
+              - Fn::Join:
+                - ""
+                - - "arn:aws:s3:::"
+                  - "codedeploy.applicationbhan.me"
+          - Effect: Allow
+            Action:
+              - ssm:GetParameter
+            Resource:
+              - "arn:aws:ssm:*:*:parameter/AmazonCloudWatch-*"
 
       Roles:
         - !Ref myInstanceRole
@@ -451,7 +506,7 @@ Resources:
         - !Ref Subnet1
         - !Ref Subnet2
         - !Ref Subnet3
-      DesiredCapacity: 3
+      DesiredCapacity: 1
       LaunchConfigurationName: !Ref AsgLaunchConfig
       MaxSize: 5
       MinSize: 1
@@ -470,7 +525,7 @@ Resources:
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref DeployAppASG
-      Cooldown: '120'
+      Cooldown: '180'
       ScalingAdjustment: '1'
   
   ScaleInPolicy:
@@ -478,13 +533,13 @@ Resources:
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref DeployAppASG
-      Cooldown: '120'
+      Cooldown: '180'
       ScalingAdjustment: '-1'
 
-  CPUAlarmHigh:
+  HighCPUalarm:
     Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      AlarmDescription: '> 5% 1 min'
+      AlarmDescription: '> 5% 2 min'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Dimensions:
@@ -492,16 +547,16 @@ Resources:
           Value: !Ref DeployAppASG
       Statistic: Average
       ComparisonOperator: GreaterThanThreshold
-      Period: '60'
+      Period: '120'
       EvaluationPeriods: '1'
       Threshold: '5'
       AlarmActions:
         - !Ref ScaleOutPolicy
 
-  CPUAlarmLow:
+  LowCPUalarm:
     Type: 'AWS::CloudWatch::Alarm'
     Properties:
-      AlarmDescription: '< 3% 30 sec'
+      AlarmDescription: '< 3% 2 min'
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Dimensions:
@@ -560,7 +615,7 @@ Resources:
       DBParameterGroupName: appsql
       MultiAZ: false
       DBInstanceClass: db.t2.micro
-      DBInstanceIdentifier: csye6225
+      DBInstanceIdentifier: csye6225test
       AllocatedStorage: 5
       DBName: csye6225
       DBSubnetGroupName: !Ref myDBSubnetGroup
@@ -581,6 +636,54 @@ Resources:
       Name: prod.applicationbhan.me
       Type: A
 
+  myCodeDeployApplication:
+    Type: "AWS::CodeDeploy::Application"
+    Properties:
+      ApplicationName: "csye6225-webapp"
+      ComputePlatform: Server
+
+  myDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup 
+    DependsOn:
+      - DeployAppASG
+    Properties:
+      DeploymentGroupName: csye6225-webapp-development
+      ApplicationName: !Ref myCodeDeployApplication
+      DeploymentStyle:
+        DeploymentOption: WITHOUT_TRAFFIC_CONTROL
+        DeploymentType: IN_PLACE
+      DeploymentConfigName: CodeDeployDefault.AllAtOnce
+      AutoScalingGroups:
+        - !Ref DeployAppASG
+      Ec2TagFilters:
+        - Type: "KEY_AND_VALUE"
+          Key: "CodeDeploy"
+          Value: "true"
+      ServiceRoleArn: !GetAtt "myCodeDeployRole.Arn"
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events: 
+        -  DEPLOYMENT_FAILURE  
+  
+  myCodeDeployRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "CodeDeployServiceRole"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+            Sid: "CodeDeployTrustPolicy"
+            Effect: "Allow"
+            Principal:
+              Service:
+                - "codedeploy.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns: 
+        - "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+      
+    
   # myWebserver:
   #   Type: 'AWS::EC2::Instance'
   #   DependsOn: webserverRDS
@@ -704,20 +807,3 @@ Outputs:
     RouteTableId:
       Description: The Route Table ID
       Value: !Ref myRouteTable
-    
-
-  
-  
-# "RestELB" : {
-#         "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
-#         "DependsOn": "AttachGateway",
-#         "Properties": {
-#             "LoadBalancerName": {"Fn::Join": ["",["Rest-ELB-", {"Ref": "VPC"}]]},
-#             "CrossZone" : "true",
-#             "Subnets": [{ "Ref": "PublicSubnet1" },{ "Ref": "PublicSubnet2" }],
-#             "Listeners" : [
-#                 {"LoadBalancerPort" : "80", "InstancePort" : "80","Protocol" : "HTTP"},
-#                 {"LoadBalancerPort" : "6060", "InstancePort" : "6060","Protocol" : "HTTP"}
-#             ],
-#         }
-#     },
