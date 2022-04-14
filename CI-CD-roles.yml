@@ -123,3 +123,22 @@ Resources:
       Users:
         - !Ref RoleName
 
+  myGHLambdaDeploymentPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: GH-Deploy-to-Lambda
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Effect: Allow
+          Action:
+            - s3:PutObject
+            - iam:ListRoles
+            - lambda:UpdateFunctionCode
+            - lambda:CreateFunction
+            - lambda:UpdateFunctionConfiguration
+          Resource:
+            - "arn:aws:lambda:us-east-1:909665281672:function:verification-email-service"
+      Users:
+        - !Ref RoleName
+

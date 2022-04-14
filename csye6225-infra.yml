@@ -375,6 +375,27 @@ Resources:
       Roles:
         - !Ref myInstanceRole
 
+  myInstanceEmailVerificationPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: EC2-SNS-DynamoDB-policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - sns:Publish
+            Resource:
+              - !Ref mySNSTopic
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+            Resource:
+              - !GetAtt myUserTable.Arn
+      Roles:
+        - !Ref myInstanceRole
+
   S3Bucket:
     Type: AWS::S3::Bucket
     Description: Creating Amazon S3 bucket from CloudFormation
@@ -413,7 +434,7 @@ Resources:
     Type: AWS::AutoScaling::LaunchConfiguration
     DependsOn: webserverRDS
     Properties:
-      LaunchConfigurationName: asg_launch_config
+      LaunchConfigurationName: asg_launch_configuration
       ImageId: !Ref AMI
       InstanceType:
         Ref: InstanceTypeParameter
@@ -435,6 +456,7 @@ Resources:
             #!/bin/bash
             export DB_CONNECTION="${webserverRDS.Endpoint.Address}"
             export BUCKET_NAME="${bucket_name}"
+            export SNS_TOPIC="${sns_topic}"
             while IFS='=' read -r prop val; do
               case $prop in
               spring.datasource.url)
@@ -451,6 +473,9 @@ Resources:
               ;;
               amazon.bucketname)
               val="$BUCKET_NAME"
+              ;;
+              amazon.snstopic)
+              val="$SNS_TOPIC"
               ;;
               cloud.aws.credentials.instanceProfile)
               val="true"
@@ -476,7 +501,7 @@ Resources:
             send \"USE csye6225;\r\"
 
             expect \"mysql>\"
-            send \"create table users (id varchar(50) primary key, username varchar(40), password varchar(80), first_name varchar(20), last_name varchar(20), account_created datetime, account_updated datetime);\r\"
+            send \"create table users (id varchar(50) primary key, username varchar(40), password varchar(80), first_name varchar(20), last_name varchar(20), verified varchar(5), account_created datetime, account_updated datetime);\r\"
 
             expect \"mysql>\"
             send \"create table images(id varchar(50), file_name varchar(50), url varchar(120), upload_date datetime, user_id varchar(50),  foreign key(user_id) references users(id));\r\"
@@ -492,6 +517,7 @@ Resources:
 
             yum remove -y expect
           - bucket_name: !Ref S3Bucket
+            sns_topic: !Ref mySNSTopic
         
   DeployAppASG:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -615,7 +641,7 @@ Resources:
       DBParameterGroupName: appsql
       MultiAZ: false
       DBInstanceClass: db.t2.micro
-      DBInstanceIdentifier: csye6225test
+      DBInstanceIdentifier: csye6225
       AllocatedStorage: 5
       DBName: csye6225
       DBSubnetGroupName: !Ref myDBSubnetGroup
@@ -683,6 +709,122 @@ Resources:
       ManagedPolicyArns: 
         - "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
       
+  myLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: "Send verification email based on SNS topic"
+      FunctionName: verification-email-service
+      Handler: lambdafunction.handler
+      Code: 
+        ZipFile: |
+          def initial.handler(event, context):
+            print ("Lambda-Up")
+      PackageType: Zip
+      Runtime: python3.9
+      MemorySize: 512
+      Timeout: 60
+      Role: !GetAtt myLambdaRole.Arn
+      Tags:
+        - Key: Name
+          Value: verification-email-service
+
+  myLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: "LambdaServiceRole"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: 
+                - lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Path: "/"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  myLambdaPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: Lambda-SES-SNS-DynamoDBpolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:PutItem
+            Resource:
+              - !GetAtt myEmailTable.Arn
+          - Effect: Allow
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource:
+              - "arn:aws:ses:us-east-1:909665281672:identity/*"
+          - Effect: Allow
+            Action:
+              - sns:ConfirmSubscription
+            Resource:
+              - !Ref mySNSTopic
+
+      Roles:
+        - !Ref myLambdaRole
+
+  myLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt myLambdaFunction.Arn
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref mySNSTopic
+  
+  mySNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      Subscription:
+        - Endpoint:
+            Fn::GetAtt:
+              - "myLambdaFunction"
+              - "Arn"
+          Protocol: lambda
+      TopicName: verify-email
+
+  myUserTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Unverifieduser
+      AttributeDefinitions:
+        - 
+          AttributeName: "username"
+          AttributeType: "S"
+      KeySchema:
+        - 
+          AttributeName: "username"
+          KeyType: "HASH"
+      TimeToLiveSpecification:
+        AttributeName: expire
+        Enabled: true
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5 
+
+  myEmailTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: sent-emails
+      AttributeDefinitions:
+        - 
+          AttributeName: emailadd
+          AttributeType: S
+      KeySchema:
+        - 
+          AttributeName: emailadd
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
     
   # myWebserver:
   #   Type: 'AWS::EC2::Instance'
