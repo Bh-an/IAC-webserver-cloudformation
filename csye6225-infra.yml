@@ -396,6 +396,50 @@ Resources:
       Roles:
         - !Ref myInstanceRole
 
+  myInstanceEBSKeyPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: EC2-EBSKey-Policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - kms:RetireGrant
+              - kms:CreateGrant
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Encrypt
+              - kms:DescribeKey
+              - kms:Decrypt
+              - kms:*
+            Resource:
+              - !GetAtt myEBSKey.Arn
+      Roles:
+        - !Ref myInstanceRole
+
+  myInstanceRDSKeyPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: EC2-RDSKey-Policy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - kms:RetireGrant
+              - kms:CreateGrant
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:Encrypt
+              - kms:DescribeKey
+              - kms:Decrypt
+              - kms:*
+            Resource:
+              - !GetAtt myRDSKey.Arn
+      Roles:
+        - !Ref myInstanceRole
+
   S3Bucket:
     Type: AWS::S3::Bucket
     Description: Creating Amazon S3 bucket from CloudFormation
@@ -430,94 +474,326 @@ Resources:
               - TransitionInDays: 30
                 StorageClass: STANDARD_IA
 
-  AsgLaunchConfig:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  myEBSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/key_for_EBS_encrytpion
+      TargetKeyId: !Ref myEBSKey
+  
+  myEBSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: ebs-kms-key
+        Statement:
+          - Sid: Allow Administration of the key
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:user/bhan
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow root Administration of the key
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:root
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+          - Sid: Allow persistent resources
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                'kms:GrantIsForAWSResource': true
+
+  myRDSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: alias/key_for_RDS_encrytpion
+      TargetKeyId: !Ref myRDSKey
+  
+  myRDSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: ebs-kms-key
+        Statement:
+          - Sid: Allow Administration of the key
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:user/bhan
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow root Administration of the key
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:root
+            Action:
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+          - Sid: Allow use of the key
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+              - kms:Create*
+              - kms:Describe*
+              - kms:Enable*
+              - kms:List*
+              - kms:Put*
+              - kms:Update*
+              - kms:Revoke*
+              - kms:Disable*
+              - kms:Get*
+              - kms:Delete*
+              - kms:ScheduleKeyDeletion
+              - kms:CancelKeyDeletion
+            Resource: '*'
+          - Sid: Allow persistent resources
+            Effect: Allow
+            Principal:
+              AWS: arn:aws:iam::909665281672:role/aws-service-role/rds.amazonaws.com/AWSServiceRoleForRDS
+            Action:
+              - kms:CreateGrant
+              - kms:ListGrants
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition:
+              Bool:
+                'kms:GrantIsForAWSResource': true
+
+  # myEBSKey:
+  #   Type: AWS::KMS::Key
+  #   Properties:
+  #     Description: Key for encrypting EBS Volumes
+  #     Enabled: TRUE
+  #     KeyPolicy:
+  #       Version: '2012-10-17'
+  #       Statement:
+  #         - Sid: Enable IAM User Permissions
+  #           Effect: Allow
+  #           Principal:
+  #             !Ref myInstanceRole
+  #           Action:
+  #             - kms:Encrypt
+  #             - kms:Decrypt
+  #             - kms:ReEncrypt*
+  #             - kms:GenerateDataKey*
+  #             - kms:DescribeKey
+  #           Resource: '*'
+  #         - Sid: Enable IAM User Permissions
+  #           Effect: Allow
+  #           Principal:
+  #             AWS: !Ref myInstanceRole
+  #           Action:
+  #             - kms:CreateGrant
+  #             - kms:ListGrants
+  #             - kms:RevokeGrant*
+  #           Resource: '*'
+  #     KeyUsage:  ENCRYPT_DECRYPT
+
+  # myAlias:
+  #   Type: AWS::KMS::Alias
+  #   Properties:
+  #     AliasName: alias/key_for_EBS_encrytpion
+  #     TargetKeyId:
+  #       Ref: myEBSKey
+
+  AsgLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     DependsOn: webserverRDS
     Properties:
-      LaunchConfigurationName: asg_launch_configuration
-      ImageId: !Ref AMI
-      InstanceType:
-        Ref: InstanceTypeParameter
-      KeyName: !Ref Key
-      BlockDeviceMappings:
-        - DeviceName: /dev/xvda
-          Ebs:
-            VolumeSize: 16
-            VolumeType: gp2
-            DeleteOnTermination: true
-      SecurityGroups:
-        - !Ref InstanceSecurityGroup
-      IamInstanceProfile: !Ref myInstanceProfile
-      AssociatePublicIpAddress: true
-      UserData:
-        Fn::Base64: 
-          !Sub 
-          - |
-            #!/bin/bash
-            export DB_CONNECTION="${webserverRDS.Endpoint.Address}"
-            export BUCKET_NAME="${bucket_name}"
-            export SNS_TOPIC="${sns_topic}"
-            while IFS='=' read -r prop val; do
-              case $prop in
-              spring.datasource.url)
-              val="jdbc:mysql://$DB_CONNECTION:3306/csye6225"
-              ;;
-              spring.datasource.username)
-              val="csye6225"
-              ;;
-              spring.datasource.password)
-              val="Markiplierpewpew91!"
-              ;;
-              spring.datasource.driver-class-name)
-              val="com.mysql.jdbc.Driver"
-              ;;
-              amazon.bucketname)
-              val="$BUCKET_NAME"
-              ;;
-              amazon.snstopic)
-              val="$SNS_TOPIC"
-              ;;
-              cloud.aws.credentials.instanceProfile)
-              val="true"
-              ;;
-              esac
-              printf '%s\n' "$prop=$val"
-            done < /home/ec2-user/javaapp/application.properties > file.tmp && mv file.tmp /home/ec2-user/javaapp/application.properties
+      LaunchTemplateName: asg_launch_template
+      LaunchTemplateData:
+        ImageId: !Ref AMI
+        InstanceType:
+          Ref: InstanceTypeParameter
+        KeyName: !Ref Key
+        BlockDeviceMappings:
+          - DeviceName: /dev/xvda
+            Ebs:
+              Encrypted: true
+              KmsKeyId: !Ref myEBSKey
+              VolumeSize: 16
+              VolumeType: gp2
+              DeleteOnTermination: true
+        SecurityGroupIds:
+          - !GetAtt InstanceSecurityGroup.GroupId
+        IamInstanceProfile:
+            Name: !Ref myInstanceProfile
+        UserData:
+          Fn::Base64: 
+            !Sub 
+            - |
+              #!/bin/bash
+              export DB_CONNECTION="${webserverRDS.Endpoint.Address}"
+              export BUCKET_NAME="${bucket_name}"
+              export SNS_TOPIC="${sns_topic}"
+              while IFS='=' read -r prop val; do
+                case $prop in
+                spring.datasource.url)
+                val="jdbc:mysql://$DB_CONNECTION:3306/csye6225?verifyServerCertificate=true&useSSL=true&requireSSL=true"
+                ;;
+                spring.datasource.username)
+                val="csye6225"
+                ;;
+                spring.datasource.password)
+                val="Markiplierpewpew91!"
+                ;;
+                spring.datasource.driver-class-name)
+                val="com.mysql.jdbc.Driver"
+                ;;
+                amazon.bucketname)
+                val="$BUCKET_NAME"
+                ;;
+                amazon.snstopic)
+                val="$SNS_TOPIC"
+                ;;
+                cloud.aws.credentials.instanceProfile)
+                val="true"
+                ;;
+                esac
+                printf '%s\n' "$prop=$val"
+              done < /home/ec2-user/javaapp/application.properties > file.tmp && mv file.tmp /home/ec2-user/javaapp/application.properties
 
-            yum install -y expect
+              yum install -y expect
 
-            MYSQL_UPDATE=$(expect -c "
+              MYSQL_UPDATE=$(expect -c "
 
-            set timeout 5 
-            spawn mysql -h $DB_CONNECTION -P 3306 -u csye6225 -p
+              set timeout 5 
+              spawn mysql -h $DB_CONNECTION -P 3306 -u csye6225 -p
 
-            expect \"Enter password: \"
-            send \"Markiplierpewpew91!\r\"
-       
-            expect \"mysql>\"
-            send \"CREATE DATABASE csye6225;\r\"
+              expect \"Enter password: \"
+              send \"Markiplierpewpew91!\r\"
+        
+              expect \"mysql>\"
+              send \"CREATE DATABASE csye6225;\r\"
 
-            expect \"mysql>\"
-            send \"USE csye6225;\r\"
+              expect \"mysql>\"
+              send \"USE csye6225;\r\"
 
-            expect \"mysql>\"
-            send \"create table users (id varchar(50) primary key, username varchar(40), password varchar(80), first_name varchar(20), last_name varchar(20), verified varchar(5), account_created datetime, account_updated datetime);\r\"
+              expect \"mysql>\"
+              send \"create table users (id varchar(50) primary key, username varchar(40), password varchar(80), first_name varchar(20), last_name varchar(20), verified varchar(5), account_created datetime, account_updated datetime);\r\"
 
-            expect \"mysql>\"
-            send \"create table images(id varchar(50), file_name varchar(50), url varchar(120), upload_date datetime, user_id varchar(50),  foreign key(user_id) references users(id));\r\"
+              expect \"mysql>\"
+              send \"create table images(id varchar(50), file_name varchar(50), url varchar(120), upload_date datetime, user_id varchar(50),  foreign key(user_id) references users(id));\r\"
 
-            expect \"mysql>\"
-            send \"quit;\r\"
+              expect \"mysql>\"
+              send \"quit;\r\"
 
-            expect eof
-            ")
+              expect eof
+              ")
 
-            echo "$MYSQL_UPDATE"
+              echo "$MYSQL_UPDATE"
 
 
-            yum remove -y expect
-          - bucket_name: !Ref S3Bucket
-            sns_topic: !Ref mySNSTopic
+              yum remove -y expect
+            - bucket_name: !Ref S3Bucket
+              sns_topic: !Ref mySNSTopic
         
   DeployAppASG:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -533,7 +809,10 @@ Resources:
         - !Ref Subnet2
         - !Ref Subnet3
       DesiredCapacity: 1
-      LaunchConfigurationName: !Ref AsgLaunchConfig
+      HealthCheckGracePeriod: 300
+      LaunchTemplate:
+        LaunchTemplateId: !Ref AsgLaunchTemplate
+        Version: !GetAtt AsgLaunchTemplate.LatestVersionNumber
       MaxSize: 5
       MinSize: 1
       TargetGroupARNs:
@@ -625,6 +904,21 @@ Resources:
       Port: '80'
       Protocol: HTTP
 
+  SecureListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: WebAppTargetGroup
+      LoadBalancerArn:
+        Ref: WebAppALB
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: arn:aws:acm:us-east-1:909665281672:certificate/609d13db-3b4a-41fe-9ba6-a515060ed574
+      SslPolicy: ELBSecurityPolicy-2016-08
+
   WebAppTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -640,10 +934,12 @@ Resources:
     Properties:
       DBParameterGroupName: appsql
       MultiAZ: false
-      DBInstanceClass: db.t2.micro
-      DBInstanceIdentifier: csye6225
+      DBInstanceClass: db.t2.small
+      DBInstanceIdentifier: csye6225test
+      StorageEncrypted: true
+      KmsKeyId: !Ref myRDSKey
       AllocatedStorage: 5
-      DBName: csye6225
+      DBName: csye6225test
       DBSubnetGroupName: !Ref myDBSubnetGroup
       PubliclyAccessible: false
       DeleteAutomatedBackups: true
