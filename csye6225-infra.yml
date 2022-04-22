@@ -789,6 +789,9 @@ Resources:
               send \"create table images(id varchar(50), file_name varchar(50), url varchar(120), upload_date datetime, user_id varchar(50),  foreign key(user_id) references users(id));\r\"
 
               expect \"mysql>\"
+              send \"ALTER USER csye6225@'%' REQUIRE SSL;\r\"
+
+              expect \"mysql>\"
               send \"quit;\r\"
 
               expect eof
