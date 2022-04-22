@@ -713,6 +713,12 @@ Resources:
         InstanceType:
           Ref: InstanceTypeParameter
         KeyName: !Ref Key
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !GetAtt InstanceSecurityGroup.GroupId
+            DeleteOnTermination: true
         BlockDeviceMappings:
           - DeviceName: /dev/xvda
             Ebs:
@@ -721,8 +727,8 @@ Resources:
               VolumeSize: 16
               VolumeType: gp2
               DeleteOnTermination: true
-        SecurityGroupIds:
-          - !GetAtt InstanceSecurityGroup.GroupId
+        # SecurityGroupIds:
+        #   - !GetAtt InstanceSecurityGroup.GroupId
         IamInstanceProfile:
             Name: !Ref myInstanceProfile
         UserData:
