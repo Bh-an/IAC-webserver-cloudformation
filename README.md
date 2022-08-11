@@ -4,17 +4,17 @@
 
 ### The main-stack includes:
 
-#### A VPC block with 3 public and 3 private subnets with relating routing tables
-#### An autoscaling group for deploying instances through a launch template inclusing user data for configuring the application
-#### A remote RDS for providing data access to every instance created along with DynamoDB tables for transient data
-#### A Lambda function along with related roles and policies
-#### A load balancer and a target group pointing to the application
-#### An S3 bucket for object storage by the application along with related roles and policies
-#### KMS keys, aliases and policies for EC2 and RDS encryption
-#### A secure listener for SSL access to the application
-#### Roles, Security groups, policies for securing and consolidating access where needed
-#### Scaling policies along with related alarms
-#### Codedeploy application along with cloudwatch and related policies
+#### > A VPC block with 3 public and 3 private subnets with relating routing tables
+#### > An autoscaling group for deploying instances through a launch template inclusing user data for configuring the application
+#### > A remote RDS for providing data access to every instance created along with DynamoDB tables for transient data
+#### > A Lambda function along with related roles and policies
+#### > A load balancer and a target group pointing to the application
+#### > An S3 bucket for object storage by the application along with related roles and policies
+#### > KMS keys, aliases and policies for EC2 and RDS encryption
+#### > A secure listener for SSL access to the application
+#### > Roles, Security groups, policies for securing and consolidating access where needed
+#### > Scaling policies along with related alarms
+#### > Codedeploy application along with cloudwatch and related policies
 
 Note: Some resources will need additional configurations and existing properties to exist in the AWS account
 
