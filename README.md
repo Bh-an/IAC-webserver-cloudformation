@@ -1,6 +1,6 @@
-# infrastructure for hosting java webapp on AWS compute cloud
+# Infrastructure stack for hosting a webapp on AWS
 
-## Cloudformation template for creating the resource stack and making the whole webapp service redeployable
+## Cloudformation template for creating the resources and infrastructure for a webapp deployment in a scalable and reliable hosted system
 
 ### The main-stack includes:
 
